@@ -25,33 +25,43 @@ on any other event.
 
 ## Workspace layout
 
-Use a Cargo workspace with two crates, so the core logic can be tested without X-Plane:
+A Cargo workspace with two crates, so the core logic can be tested without X-Plane:
 
 ```
 Cargo.toml                  # [workspace] members = ["core", "plugin"]
 core/                       # simbrief-core: pure Rust, no XPLM dependency
-  src/lib.rs
+  src/lib.rs                # Error type, download_flight_plan() flow
   src/config.rs             # config file parsing + validation
-  src/simbrief.rs           # API request/response types, URL building, fetch
+  src/simbrief.rs           # API response parsing, HttpClient trait, ureq client
   src/routing.rs            # ICAO -> target directory resolution, file naming
   src/matching.rs           # loaded aircraft vs OFP ICAO check
   src/write.rs              # atomic file write
-  tests/fixtures/           # saved SimBrief JSON responses (strip personal data)
+  tests/fixtures/           # sanitized SimBrief responses + a real FF757 .flp
 plugin/                     # simbrief-plugin: cdylib, the only crate that touches XPLM
-  src/lib.rs                # plugin entry points (xplane_plugin! macro)
-  src/menu.rs               # Plugins menu + custom commands
+  build.rs                  # macOS: -undefined dynamic_lookup
+  src/lib.rs                # XPlugin* entry points, plugin state, actions
+  src/ffi.rs                # hand-written XPLM declarations
+  src/xp.rs                 # safe wrappers: log, paths, dataref, menu, command, flight loop
+  src/message.rs            # self-hiding on-screen notification window
   src/worker.rs             # background download thread + result channel
+tools/
+  build-dist.sh             # build + lay out dist/SimBriefDownloader/lin_x64/*.xpl
+  zigcc, zigar              # Zig wrappers for cross-compiling to x86_64 Linux
 ```
 
-`core` must not depend on `xplm`/`xplm-sys`. A test binary that links XPLM symbols fails
-to link outside the sim, so all logic that needs testing goes in `core`.
+`core` must not touch XPLM. A test binary that links XPLM symbols fails to link outside
+the sim, so all logic that needs testing goes in `core`.
 
 ## Dependencies
 
-- `xplm` (Rust bindings, github.com/samcrow/rust-xplm) and `xplm-sys`. Check the latest
-  published versions before pinning them. If the safe wrapper lacks an API (e.g.
-  `XPLMEnableFeature`, `XPLMGetSystemPath`), call `xplm-sys` directly inside a small
-  `unsafe` wrapper.
+- **No XPLM binding crate.** The ~25 XPLM functions used are declared by hand in
+  `plugin/src/ffi.rs`, checked against the X-Plane 12 SDK headers. This avoids
+  bindgen/libclang and needing the SDK at build time, which matters for
+  cross-compiling. When adding a call, copy its signature from the SDK header (the
+  user has a copy at `~/dev/XTLua/SDK/CHeaders`) and wrap it in `xp.rs`.
+  - Linux: XPLM symbols stay undefined and resolve when X-Plane loads the plugin.
+  - Windows: `#[link(name = "XPLM_64", kind = "raw-dylib")]`, so no import library.
+  - macOS: `build.rs` passes `-undefined dynamic_lookup`.
 - `ureq` for HTTP with the `rustls` TLS backend, not OpenSSL. It is blocking, which is
   fine on a worker thread, and it avoids a tokio runtime and system OpenSSL linking
   problems when cross-compiling.
@@ -83,6 +93,10 @@ Keep the dependency tree small. Do not add an async runtime.
 - **Shutdown:** in `disable`/`stop`, unregister the flight loop and destroy the menu.
   Do not join a worker thread that may be stuck on the network. Detach it and drop
   its results.
+- **State:** a `thread_local!` `RefCell<Option<Plugin>>`, created in `XPluginEnable`
+  and taken out and dropped in `XPluginDisable`. Menu, commands, flight loop and window
+  are RAII wrappers whose `Drop` unregisters them. The flight loop runs every 0.25 s to
+  poll the worker and hide expired messages.
 - Plugin signature: `com.github.kajetan.simbriefdownloader`. Name: `SimBrief Downloader`.
 
 ## User interface
@@ -232,7 +246,7 @@ Rules:
 - Write atomically: write to a temp file in the target directory (`.{name}.tmp`),
   `fsync`, then `rename` over the final name. If anything fails, remove the temp file.
 
-## Open questions (resolve before or during implementation)
+## Open questions
 
 - Is `acf_ICAO` correct for the add-ons that matter, e.g. does the FF757 report
   `B752`/`B753`? If an aircraft reports an unexpected code, ask the user before
@@ -248,18 +262,21 @@ Rules:
     win_x64/SimBriefDownloader.xpl
     mac_x64/SimBriefDownloader.xpl   # universal (x86_64 + arm64) binary via lipo
   ```
-  Add a `justfile` or `xtask` that builds and renames the artifacts, i.e.
-  `libsimbrief_plugin.so`, `simbrief_plugin.dll` and `libsimbrief_plugin.dylib`,
-  into this layout under `dist/`.
-- Platform notes:
-  - Linux: build natively (`x86_64-unknown-linux-gnu`).
-  - Windows: `x86_64-pc-windows-gnu` cross-compile from Linux, or MSVC on Windows.
-    Link against `XPLM_64.lib` from the SDK.
-  - macOS: link with `-undefined dynamic_lookup` (or the SDK's `XPLM.framework`).
-    Building for both `x86_64-apple-darwin` and `aarch64-apple-darwin` and combining
-    them with `lipo` requires macOS or osxcross.
-- The X-Plane SDK path comes from an env var (e.g. `XPLANE_SDK`) that `xplm-sys`'s
-  build script uses. Do not commit the SDK.
+- **Linux (done):** `tools/build-dist.sh` builds `x86_64-unknown-linux-gnu` and copies
+  `libsimbrief_plugin.so` to `dist/SimBriefDownloader/lin_x64/SimBriefDownloader.xpl`.
+  - The user's dev machine is **aarch64 Linux**, and X-Plane on Linux is x86_64 only.
+    So the script cross-compiles through Zig (`tools/zigcc`, target glibc 2.28),
+    for both the final link and `ring`'s C code.
+  - Zig is not on PATH there. Use
+    `ZIG="$HOME/.cache/re-tools/zigenv/bin/python -m ziglang" tools/build-dist.sh`.
+  - The Rust target needed is `rustup target add x86_64-unknown-linux-gnu`.
+  - Check the result with `readelf -d` (only libc, libpthread, libdl and ld-linux
+    needed), `objdump -T` (GLIBC ≤ 2.28) and `nm -D --defined-only` (only the five
+    `XPlugin*` symbols).
+- **Windows / macOS: not set up yet.** The FFI is prepared (raw-dylib, dynamic_lookup),
+  but no build has been made or tested. Windows would be `x86_64-pc-windows-gnu` or
+  MSVC. macOS needs `x86_64-apple-darwin` + `aarch64-apple-darwin` combined with
+  `lipo`, which requires macOS or osxcross. Ask the user before adding either.
 
 ## Testing
 
@@ -286,6 +303,12 @@ Rules:
 - Use `tempfile` for a fake X-Plane root in tests. Abstract the HTTP fetch behind a
   small trait so the download flow can be tested with canned responses, with no
   network in tests.
+- X-Plane can't run on the aarch64 dev machine. During development the native aarch64
+  build was exercised end-to-end with a throwaway C host that implements the XPLM
+  functions, `dlopen`s the plugin, and drives the menu, commands, flight loop and
+  window draw. If plugin-side behaviour changes substantially, rebuild a similar
+  harness (link it with `-rdynamic` so the plugin resolves XPLM symbols from it), and
+  keep live requests to a minimum.
 - Manual check in the sim: install to `Resources/plugins`, run Download, confirm the
   `Log.txt` output and the file location for a mapped ICAO and an unmapped ICAO.
   Load a non-matching aircraft and confirm the error appears and no file is written.
@@ -305,15 +328,16 @@ Rules:
 ## Commands
 
 ```
-cargo build --release -p simbrief-plugin    # build the plugin
+tools/build-dist.sh                         # build the X-Plane plugin into dist/ (see Build)
+cargo build -p simbrief-plugin              # native build, for compile checks / harness
 cargo test -p simbrief-core                 # run unit tests (no X-Plane needed)
-cargo clippy --workspace -- -D warnings     # lint; keep it clean
+cargo clippy --workspace --all-targets -- -D warnings   # lint; keep it clean
 cargo fmt --all                             # format
 ```
 
 ## Conventions
 
-- Rust 2021 edition, stable toolchain.
+- Rust 2021 edition. The code must build on stable (the user's default is nightly).
 - `unsafe` only in `plugin`, kept in small functions with a `// SAFETY:` comment.
 - Error messages shown to the user must be short and actionable. Name the path or the
   config line involved.
