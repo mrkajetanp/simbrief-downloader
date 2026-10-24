@@ -246,11 +246,13 @@ Rules:
 - Write atomically: write to a temp file in the target directory (`.{name}.tmp`),
   `fsync`, then `rename` over the final name. If anything fails, remove the temp file.
 
-## Open questions
+## Aircraft notes
 
-- Is `acf_ICAO` correct for the add-ons that matter, e.g. does the FF757 report
-  `B752`/`B753`? If an aircraft reports an unexpected code, ask the user before
-  adding any alias mechanism. Strict equality is the specified behaviour.
+- The FlightFactor 757 V2 reports `acf_ICAO` as `B752` (757-200) or `B753`
+  (757-300), as confirmed by the user. These match SimBrief's types, so strict equality
+  works and the two config lines `B752:…:vm5` / `B753:…:vm5` cover it.
+- If another aircraft reports an unexpected code, ask the user before adding any alias
+  mechanism. Strict equality is the specified behaviour.
 
 ## Build & packaging
 
