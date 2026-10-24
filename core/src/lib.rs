@@ -64,6 +64,9 @@ pub struct DownloadRequest {
     pub config: Config,
     /// ICAO type of the aircraft loaded in the sim (`acf_ICAO`).
     pub loaded_icao: String,
+    /// Use this SimBrief format instead of the configured one (dev tool only; the
+    /// plugin always passes `None`).
+    pub format_override: Option<String>,
 }
 
 /// A flight plan that was saved.
@@ -97,7 +100,11 @@ pub fn download_flight_plan(
 
     let icao = matching::check_match(&request.loaded_icao, &ofp)?;
     let target = routing::resolve_target(&request.xplane_root, &request.config, &icao)?;
-    let download = ofp.download(&target.format)?;
+    let format = match &request.format_override {
+        Some(format) => format.to_ascii_lowercase(),
+        None => target.format.clone(),
+    };
+    let download = ofp.download(&format)?;
     let url = ofp.download_url(download)?;
 
     let file = client.get(&url).map_err(Error::Network)?;
@@ -116,7 +123,7 @@ pub fn download_flight_plan(
         file_name,
         display_dir: target.display_dir,
         aircraft_icao: icao,
-        format: target.format,
+        format,
         format_name: download.name.clone(),
     })
 }
@@ -251,6 +258,7 @@ mod tests {
             xplane_root: root.to_path_buf(),
             config,
             loaded_icao: loaded.into(),
+            format_override: None,
         }
     }
 
@@ -384,6 +392,17 @@ mod tests {
             let plans = root.path().join("Output").join("FMS plans");
             assert_eq!(std::fs::read_dir(plans).unwrap().count(), 0);
         }
+    }
+
+    #[test]
+    fn format_override_replaces_configured_format() {
+        let root = xplane_root();
+        let mut request = request(root.path(), "E55P:Embraer/co-routes:xpe", "E55P");
+        request.format_override = Some("VM5".into());
+        let saved = download_flight_plan(&fixture_client(), &request).unwrap();
+        assert_eq!(saved.format, "vm5");
+        assert_eq!(saved.file_name, "SLLPSABE.flp");
+        assert_eq!(saved.display_dir, "Aircraft/Embraer/co-routes");
     }
 
     #[test]

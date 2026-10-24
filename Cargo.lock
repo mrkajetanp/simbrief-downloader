@@ -321,6 +321,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "simbrief-dev"
+version = "0.1.0"
+dependencies = [
+ "simbrief-core",
+]
+
+[[package]]
 name = "simbrief-plugin"
 version = "0.1.0"
 dependencies = [

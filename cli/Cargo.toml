@@ -1,0 +1,11 @@
+[package]
+name = "simbrief-dev"
+description = "Command-line tool for testing SimBrief Downloader without X-Plane"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+simbrief-core = { path = "../core" }

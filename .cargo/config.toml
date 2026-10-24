@@ -1,0 +1,3 @@
+[alias]
+# Dev CLI: `cargo sb fetch --type B752`, `cargo sb info`, `cargo sb config`
+sb = "run -q -p simbrief-dev --"

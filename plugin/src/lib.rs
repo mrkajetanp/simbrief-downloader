@@ -193,6 +193,7 @@ impl Plugin {
             xplane_root: self.xplane_root.clone(),
             config: self.config.clone(),
             loaded_icao,
+            format_override: None,
         };
         match Download::spawn(request) {
             Ok(download) => {

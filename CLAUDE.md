@@ -44,6 +44,8 @@ plugin/                     # simbrief-plugin: cdylib, the only crate that touch
   src/xp.rs                 # safe wrappers: log, paths, dataref, menu, command, flight loop
   src/message.rs            # self-hiding on-screen notification window
   src/worker.rs             # background download thread + result channel
+cli/                        # simbrief-dev: dev CLI over core (fetch/info/config)
+  src/main.rs               # hand-parsed args, no clap
 tools/
   build-dist.sh             # build + lay out dist/SimBriefDownloader/lin_x64/*.xpl
   zigcc, zigar              # Zig wrappers for cross-compiling to x86_64 Linux
@@ -318,7 +320,7 @@ Rules:
 ## Development against the live API
 
 - SimBrief pilot ID for development: the user's own account (not stored in the repo). Use it
-  for real requests.
+  for real requests, e.g. `cargo sb fetch --id <ID> --type E55P`.
 - **Keep live requests to a minimum; don't spam SimBrief's servers.** Fetch the OFP
   JSON once and save it as a fixture in `core/tests/fixtures/`. Develop and test
   against the saved file. Make a live request only to check something new, and a
@@ -333,6 +335,9 @@ Rules:
 tools/build-dist.sh                         # build the X-Plane plugin into dist/ (see Build)
 cargo build -p simbrief-plugin              # native build, for compile checks / harness
 cargo test -p simbrief-core                 # run unit tests (no X-Plane needed)
+cargo sb config                             # dev CLI: check config in target/xplane-sandbox
+cargo sb info                               # dev CLI: latest OFP + formats (1 live request)
+cargo sb fetch --type B752 [--format vm5]   # dev CLI: plugin download flow (2 live requests)
 cargo clippy --workspace --all-targets -- -D warnings   # lint; keep it clean
 cargo fmt --all                             # format
 ```

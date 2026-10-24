@@ -63,6 +63,27 @@ on your PATH. Windows and macOS builds are not set up yet.
 
 Run the tests with `cargo test -p simbrief-core`.
 
+## Testing without X-Plane
+
+`simbrief-dev` runs the plugin's download logic from the command line. It uses a fake
+X-Plane directory, `target/xplane-sandbox` by default, with its config at
+`Output/preferences/SimBriefDownloader.txt`. The config is created on first use.
+
+```
+cargo sb info                          # latest flight plan: aircraft, route, all formats
+cargo sb fetch --type B752             # download as if a B752 were loaded
+cargo sb fetch --type B752 --format xpe  # same, forcing a SimBrief format
+cargo sb config                        # check the config, show where each type goes
+```
+
+- `fetch` refuses, like the plugin does, if the flight plan is for another aircraft
+  type.
+- The pilot ID comes from `--id`, the config's `simbrief_id`, or `SIMBRIEF_ID`.
+- Use `--root <dir>` to point at a different X-Plane directory, including a real one.
+- To test a mapping, create its directory first, e.g.
+  `mkdir -p target/xplane-sandbox/Aircraft/Boeing/757/co-routes`.
+- `info` and `fetch` make live SimBrief requests, so please don't run them in a loop.
+
 ## License
 
 BSD 2-Clause, see [LICENSE](LICENSE).
