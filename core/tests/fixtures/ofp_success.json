@@ -1,0 +1,55 @@
+{
+  "fetch": {
+    "status": "Success"
+  },
+  "params": {
+    "request_id": "191000981",
+    "time_generated": "1792870617"
+  },
+  "aircraft": {
+    "icaocode": "E55P",
+    "icao_code": "E55P",
+    "name": "Phenom 300"
+  },
+  "origin": {
+    "icao_code": "SLLP"
+  },
+  "destination": {
+    "icao_code": "SABE"
+  },
+  "fms_downloads": {
+    "directory": "https://www.simbrief.com/ofp/flightplans/",
+    "pdf": {
+      "name": "PDF Document",
+      "link": "SLLPSABE_PDF_1792870617.pdf"
+    },
+    "a3e": {
+      "name": "Aerosoft Airbus EFB",
+      "link": "SLLPSABE_PDF_1792870617.pdf--A3E"
+    },
+    "vm5": {
+      "name": "FlightFactor 757 V2",
+      "link": "SLLPSABE_VMX_1792870617.flp--VM5"
+    },
+    "vmx": {
+      "name": "FlightFactor 767-777",
+      "link": "SLLPSABE_VMX_1792870617.flp"
+    },
+    "xpe": {
+      "name": "X-Plane 11/12",
+      "link": "SLLPSABE_XPE_1792870617.fms"
+    },
+    "xpn": {
+      "name": "X-Plane 11/12 (No SID/STAR)",
+      "link": "SLLPSABE_XPN_1792870617.fms"
+    },
+    "zbo": {
+      "name": "Zibo Mod B737",
+      "link": "xml/SLLPSABE_XML_1792870617.xml--ZBO"
+    },
+    "ify": {
+      "name": "iFly 737NG",
+      "link": "SLLPSABE_IFY_1792870617.FLTPLAN"
+    }
+  }
+}
