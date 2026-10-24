@@ -1,0 +1,13 @@
+[package]
+name = "simbrief-plugin"
+description = "X-Plane 12 plugin that downloads SimBrief flight plans"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+simbrief-core = { path = "../core" }
