@@ -1,0 +1,4 @@
+#!/bin/sh
+# Archiver counterpart of tools/zigcc, for C code built by cc-rs (ring).
+ZIG=${ZIG:-zig}
+exec $ZIG ar "$@"

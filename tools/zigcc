@@ -1,0 +1,19 @@
+#!/bin/sh
+# C compiler and linker for x86_64 Linux (glibc 2.28+) using Zig's bundled clang/lld.
+# Used for cross-compiling from non-x86_64 hosts; see tools/build-dist.sh.
+# Override ZIG to point at a zig command; default is `zig` on PATH.
+ZIG=${ZIG:-zig}
+
+# Rust passes -lgcc_s for unwinding, which Zig does not ship; its libunwind replaces it.
+# cc-rs passes --target=<rust triple>, which Zig cannot parse; the target is set below.
+for arg in "$@"; do
+    shift
+    case "$arg" in
+        -lgcc_s) set -- "$@" -lunwind ;;
+        --target=*) ;;
+        -Wl,-O1) ;; # lld warns that this is deprecated
+        *) set -- "$@" "$arg" ;;
+    esac
+done
+
+exec $ZIG cc -target x86_64-linux-gnu.2.28 "$@"
