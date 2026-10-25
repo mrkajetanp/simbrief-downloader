@@ -19,7 +19,7 @@ use message::{Kind, MessageWindow};
 use worker::Download;
 
 const NAME: &str = "SimBrief Downloader";
-const SIGNATURE: &str = "com.github.kajetan.simbriefdownloader";
+const SIGNATURE: &str = "com.github.mrkajetanp.simbriefdownloader";
 const DESCRIPTION: &str =
     "Downloads SimBrief flight plans into the directory the loaded aircraft expects.";
 

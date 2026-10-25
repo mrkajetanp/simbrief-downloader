@@ -100,7 +100,7 @@ Keep the dependency tree small. Do not add an async runtime.
   and taken out and dropped in `XPluginDisable`. Menu, commands, flight loop and window
   are RAII wrappers whose `Drop` unregisters them. The flight loop runs every 0.25 s to
   poll the worker and hide expired messages.
-- Plugin signature: `com.github.kajetan.simbriefdownloader`. Name: `SimBrief Downloader`.
+- Plugin signature: `com.github.mrkajetanp.simbriefdownloader`. Name: `SimBrief Downloader`.
 
 ## User interface
 
