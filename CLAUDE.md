@@ -338,8 +338,12 @@ Rules:
 
 ## Development against the live API
 
-- SimBrief pilot ID for development: the user's own account (not stored in the repo). Use it
-  for real requests, e.g. `cargo sb fetch --id <ID> --type E55P`.
+- SimBrief pilot ID for development: the user's own account, kept in the gitignored
+  `.simbrief-id` file at the repo root (just the number). `cargo sb` reads it
+  automatically when no other ID is given, e.g. `cargo sb fetch --type E55P`; to use
+  it elsewhere, read it with `cat .simbrief-id`.
+- **Never write the real ID into a tracked file or a commit message.** It was scrubbed
+  from history once. Tests and examples use placeholders such as `123456`.
 - **Keep live requests to a minimum; don't spam SimBrief's servers.** Fetch the OFP
   JSON once and save it as a fixture in `core/tests/fixtures/`. Develop and test
   against the saved file. Make a live request only to check something new, and a

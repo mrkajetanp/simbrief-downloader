@@ -11,6 +11,9 @@ use simbrief_core::{config_path, download_flight_plan, routing, DownloadRequest}
 
 const USER_AGENT: &str = concat!("SimBriefDownloader-dev/", env!("CARGO_PKG_VERSION"));
 const DEFAULT_ROOT: &str = "target/xplane-sandbox";
+/// Gitignored file at the workspace root holding the developer's pilot ID, so it never
+/// has to appear in tracked files.
+const ID_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../.simbrief-id");
 
 const USAGE: &str = "\
 simbrief-dev: test SimBrief Downloader without X-Plane
@@ -34,7 +37,8 @@ OPTIONS:
                   Mapped directories under <DIR>/Aircraft must exist; create them with
                   mkdir -p to test a mapping.
     --id <N>      SimBrief pilot ID; default: simbrief_id from the config, then the
-                  SIMBRIEF_ID environment variable.
+                  SIMBRIEF_ID environment variable, then the gitignored .simbrief-id
+                  file at the repository root.
 
 fetch and info each make live requests to SimBrief; please don't run them in a loop.";
 
@@ -119,8 +123,11 @@ fn simbrief_id(args: &Args, config: &Config) -> Result<u64, String> {
     args.id
         .or(config.simbrief_id)
         .or_else(|| std::env::var("SIMBRIEF_ID").ok()?.trim().parse().ok())
+        .or_else(|| std::fs::read_to_string(ID_FILE).ok()?.trim().parse().ok())
         .ok_or_else(|| {
-            "no SimBrief ID: pass --id, set simbrief_id in the config, or set SIMBRIEF_ID".into()
+            "no SimBrief ID: pass --id, set simbrief_id in the config, set SIMBRIEF_ID, \
+             or put it in .simbrief-id at the repository root"
+                .into()
         })
 }
 

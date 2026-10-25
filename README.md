@@ -84,7 +84,8 @@ cargo sb config                        # check the config, show where each type 
 
 - `fetch` refuses, like the plugin does, if the flight plan is for another aircraft
   type.
-- The pilot ID comes from `--id`, the config's `simbrief_id`, or `SIMBRIEF_ID`.
+- The pilot ID comes from `--id`, the config's `simbrief_id`, `SIMBRIEF_ID`, or a
+  `.simbrief-id` file at the repository root (gitignored, just the number).
 - Use `--root <dir>` to point at a different X-Plane directory, including a real one.
 - To test a mapping, create its directory first, e.g.
   `mkdir -p target/xplane-sandbox/Aircraft/Boeing/757/co-routes`.
