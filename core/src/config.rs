@@ -24,10 +24,14 @@ simbrief_id:
 #   ICAO:path[:format]
 #
 #   ICAO   - aircraft type designator as used by SimBrief and X-Plane, e.g. B752
-#   path   - directory relative to <X-Plane>/Aircraft/
+#   path   - directory relative to <X-Plane>/Aircraft/; leave it empty for
+#            the default Output/FMS plans directory
 #   format - optional SimBrief download format (default: xpe = X-Plane 11/12 .fms)
 #
 # Aircraft without an entry get an X-Plane .fms file in Output/FMS plans.
+#
+# Zibo 737-800 reads SimBrief's Zibo XML format from Output/FMS plans/b738x.xml:
+B738::zbo
 #
 # FlightFactor 757 V2 reads its own .flp route format from co-routes:
 #B752:Boeing/757/co-routes:vm5
@@ -37,8 +41,9 @@ simbrief_id:
 /// Where flight plans for one aircraft type go.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mapping {
-    /// Directory relative to `<X-Plane>/Aircraft/`, already validated.
-    pub path: PathBuf,
+    /// Directory relative to `<X-Plane>/Aircraft/`, already validated. `None` (an empty
+    /// path in the file) means the default `Output/FMS plans` directory.
+    pub path: Option<PathBuf>,
     /// SimBrief `fms_downloads` key, lowercase.
     pub format: String,
     /// 1-based line number in the config file.
@@ -122,12 +127,15 @@ impl Config {
                     continue;
                 }
             };
-            let path = match validate_aircraft_path(fields[1]) {
-                Ok(path) => path,
-                Err(message) => {
-                    err(message);
-                    continue;
-                }
+            let path = match fields[1] {
+                "" => None,
+                raw => match validate_aircraft_path(raw) {
+                    Ok(path) => Some(path),
+                    Err(message) => {
+                        err(message);
+                        continue;
+                    }
+                },
             };
             let format = match fields.get(2) {
                 None => DEFAULT_FORMAT.to_string(),
@@ -238,20 +246,39 @@ mod tests {
         assert_eq!(
             config.mappings["B752"],
             Mapping {
-                path: PathBuf::from("Boeing").join("757").join("co-routes"),
+                path: Some(PathBuf::from("Boeing").join("757").join("co-routes")),
                 format: "vm5".into(),
                 line: 4,
             }
         );
         let b738 = &config.mappings["B738"];
-        assert_eq!(b738.path, PathBuf::from("Zibo").join("B738"));
+        assert_eq!(b738.path, Some(PathBuf::from("Zibo").join("B738")));
         assert_eq!(b738.format, DEFAULT_FORMAT);
     }
 
     #[test]
     fn default_config_parses_cleanly() {
         let config = parse_ok(DEFAULT_CONFIG);
-        assert_eq!(config, Config::default());
+        assert_eq!(config.simbrief_id, None);
+        assert_eq!(config.mappings.len(), 1);
+        let b738 = &config.mappings["B738"];
+        assert_eq!(b738.path, None);
+        assert_eq!(b738.format, "zbo");
+    }
+
+    #[test]
+    fn empty_path_means_default_directory() {
+        let config = parse_ok(
+            "B738::ZBO
+A20N :  : xpn",
+        );
+        assert_eq!(config.mappings["B738"].path, None);
+        assert_eq!(config.mappings["B738"].format, "zbo");
+        assert_eq!(config.mappings["A20N"].path, None);
+        assert_eq!(config.mappings["A20N"].format, "xpn");
+        // A path that is only separators is still an error, not the default directory.
+        assert_eq!(error_lines("B738:/:zbo"), vec![1]);
+        assert_eq!(error_lines("B738:./:zbo"), vec![1]);
     }
 
     #[test]
@@ -306,7 +333,7 @@ mod tests {
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].line, 2);
         assert!(errors[0].message.contains("line 1"));
-        assert_eq!(config.mappings["B752"].path, PathBuf::from("a"));
+        assert_eq!(config.mappings["B752"].path, Some(PathBuf::from("a")));
     }
 
     #[test]
@@ -351,8 +378,9 @@ mod tests {
     fn load_or_create_writes_default() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("prefs").join("SimBriefDownloader.txt");
-        let (config, _) = Config::load_or_create(&path).unwrap();
-        assert_eq!(config, Config::default());
+        let (config, errors) = Config::load_or_create(&path).unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(config, Config::parse(DEFAULT_CONFIG).0);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), DEFAULT_CONFIG);
 
         std::fs::write(&path, "simbrief_id:42").unwrap();

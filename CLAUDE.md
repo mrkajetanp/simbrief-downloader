@@ -14,8 +14,9 @@ config file.
    type of the aircraft loaded in the sim. **If they differ, download nothing and show
    an error** (see Aircraft match check).
 3. Look the ICAO code up in the `icao:path[:format]` mappings. Use the matched path,
-   which is relative to `<X-Plane>/Aircraft/`, and its SimBrief download format. If
-   nothing matches, use `<X-Plane>/Output/FMS plans/` and the X-Plane `.fms` format.
+   which is relative to `<X-Plane>/Aircraft/`, and its SimBrief download format. An
+   empty path means `<X-Plane>/Output/FMS plans/` with the mapped format. If nothing
+   matches, use `<X-Plane>/Output/FMS plans/` and the X-Plane `.fms` format.
 4. Download the flight plan file and write it there. The download must never block or
    crash the sim.
 
@@ -156,12 +157,21 @@ Split each line on `:` and trim whitespace around every field.
 simbrief_id:123456
 
 # ICAO:path[:format]
-#   path   - directory relative to <X-Plane>/Aircraft/
+#   path   - directory relative to <X-Plane>/Aircraft/; empty = Output/FMS plans
 #   format - optional SimBrief fms_downloads key (default: xpe = X-Plane 11/12 .fms)
+#   Zibo 737-800 reads SimBrief's Zibo XML from Output/FMS plans:
+B738::zbo
 #   FlightFactor 757 V2 reads its own .flp route format from co-routes:
 B752:Boeing/757/co-routes:vm5
 B753:Boeing/757/co-routes:vm5
 ```
+
+The generated default config has `B738::zbo` active and the two 757 lines commented
+out (the 757 directory only exists if the add-on is installed). The user requires
+the B738 to get `zbo` in `Output/FMS plans`; keep that line in the default.
+`zbo` ("Zibo Mod B737") downloads as `.xml` (link `xml/…_XML_….xml--ZBO`; checked
+live). The Zibo only loads it as `b738x.xml`, so it is always saved under that name
+(see Output file).
 
 `vm5` is the FF757 V2 key, confirmed against a real response. Don't confuse it with
 `vmx`, which is the FF 767/777 format. Both download as `.flp`.
@@ -179,6 +189,9 @@ Rules:
   empty, it defaults to `xpe`. Unmapped aircraft also use `xpe`. Whether the key
   exists is checked against the API response at download time, not when the config
   is parsed.
+- An empty path (`ICAO::format`) means the default `Output/FMS plans` directory,
+  which may be created. Stored as `Mapping::path = None`. A path made only of
+  separators (`/`, `./`) is an error, not the default.
 - Mapping paths are **always relative to `<X-Plane>/Aircraft/`**. Reject absolute
   paths, paths with drive prefixes, and any path with a `..` component, so that a path
   cannot point outside `Aircraft/`. Accept both `/` and `\` as separators in the file.
@@ -233,7 +246,12 @@ Rules:
 
 ## Output file
 
-- File name: `{ORIGIN}{DEST}{ext}` (e.g. `KJFKEGLL.fms`), with `ORIGIN` and `DEST`
+- **Fixed names first:** some formats must always have one specific file name.
+  These are listed in `FIXED_FILE_NAMES` in `core/src/routing.rs`, keyed by format, and
+  the name is used exactly as listed, overwriting the previous plan. Currently only
+  `zbo` → `b738x.xml` (lowercase; the Zibo 737 reads only that file). Add an entry
+  there only when the user confirms an add-on needs it.
+- File name otherwise: `{ORIGIN}{DEST}{ext}` (e.g. `KJFKEGLL.fms`), with `ORIGIN` and `DEST`
   uppercase, overwriting any existing file of that name. Most FMSs list plans by this
   name. Get `ext` in this order:
   1. The extension of the `Content-Disposition` filename (the server sends
@@ -291,14 +309,15 @@ Rules:
   - Path validation: rejects `..`, absolute paths, `C:\...`, and accepts both
     separator styles.
   - Routing: a mapped ICAO resolves to `Aircraft/<path>`, an unmapped ICAO resolves
-    to `Output/FMS plans`, a mapped directory that does not exist is an error.
+    to `Output/FMS plans`, an empty-path mapping resolves to `Output/FMS plans` with
+    its format, a mapped directory that does not exist is an error.
   - Response parsing from fixtures: success, error status, a format key that the
     response doesn't have (the error lists the available keys).
   - File naming: the extension comes from `Content-Disposition` when it is present,
     else from the link. Cover the link shapes `X_XPE_1.fms`, `X_VMX_1.flp--VM5`,
     `xml/X_XML_1.xml--ZBO`, a link with no extension (error), and a malicious
     `Content-Disposition` filename such as `../../evil.fms` (only the extension is
-    used).
+    used), and `zbo` always giving `b738x.xml`.
   - Match check: an exact match, a case difference, NUL-padded or whitespace-padded
     `acf_ICAO`, an empty `acf_ICAO`, a missing OFP ICAO, and a mismatch. A mismatch
     must make no file-download call: assert this with the fake HTTP trait.

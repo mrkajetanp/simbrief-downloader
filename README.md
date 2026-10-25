@@ -4,8 +4,9 @@ An X-Plane 12 plugin that downloads your latest SimBrief flight plan and saves i
 the loaded aircraft looks for it.
 
 Most aircraft get an X-Plane `.fms` file in `Output/FMS plans`. Add-ons with their own
-route directory and format, like the FlightFactor 757's `.flp` routes in
-`co-routes`, can be configured per aircraft type.
+route format or directory can be configured per aircraft type: the Zibo 737-800 gets
+SimBrief's Zibo `.xml` in `Output/FMS plans` out of the box, and the FlightFactor 757's
+`.flp` routes can go to its `co-routes` directory.
 
 The plugin only downloads when you ask, and only if the aircraft loaded in the sim
 matches the aircraft type in the flight plan. Otherwise it shows an error and saves
@@ -35,17 +36,22 @@ The config file is created on first start at
 simbrief_id:123456
 
 # ICAO:path[:format]
-#   path   - directory relative to X-Plane 12/Aircraft/
+#   path   - directory relative to X-Plane 12/Aircraft/; empty = Output/FMS plans
 #   format - SimBrief download format (default: xpe = X-Plane 11/12 .fms)
+B738::zbo
 B752:Boeing/757/co-routes:vm5
 B753:Boeing/757/co-routes:vm5
 ```
 
 - Aircraft types without an entry get an X-Plane `.fms` file in `Output/FMS plans`.
+- An empty path keeps the default `Output/FMS plans` directory but uses the given
+  format. `B738::zbo` (Zibo 737-800 XML) is in the default config; the 757 lines are
+  commented out there.
 - Mapped directories must already exist. If one doesn't, the plugin reports it
   instead of creating it.
 - Files are named `{ORIGIN}{DESTINATION}.{ext}`, e.g. `KJFKEGLL.fms`, and replace an
-  existing file with the same name.
+  existing file with the same name. The exception is the Zibo format (`zbo`), which is
+  always saved as `b738x.xml` because that is the only name the Zibo 737 loads.
 - If a format name is wrong, the error says so and `Log.txt` lists the formats SimBrief
   offers. `vm5` is the FlightFactor 757 V2 and `vmx` is the FlightFactor 767/777.
 

@@ -16,20 +16,15 @@ pub struct Target {
     pub display_dir: String,
 }
 
-/// Resolves the target for an ICAO type. A mapped directory must already exist; the
-/// default `Output/FMS plans` directory is created if needed.
+/// Resolves the target for an ICAO type. A mapped directory under `Aircraft/` must already
+/// exist; the default `Output/FMS plans` directory (used by unmapped types and by mappings
+/// with an empty path) is created if needed.
 pub fn resolve_target(xplane_root: &Path, config: &Config, icao: &str) -> Result<Target, Error> {
-    let (relative, format, create) = match config.mappings.get(&icao.to_ascii_uppercase()) {
-        Some(mapping) => (
-            Path::new("Aircraft").join(&mapping.path),
-            mapping.format.clone(),
-            false,
-        ),
-        None => (
-            Path::new("Output").join("FMS plans"),
-            DEFAULT_FORMAT.to_string(),
-            true,
-        ),
+    let mapping = config.mappings.get(&icao.to_ascii_uppercase());
+    let format = mapping.map_or(DEFAULT_FORMAT, |m| &m.format).to_string();
+    let (relative, create) = match mapping.and_then(|m| m.path.as_ref()) {
+        Some(path) => (Path::new("Aircraft").join(path), false),
+        None => (default_dir(), true),
     };
     let dir = xplane_root.join(&relative);
     let display_dir = display_path(&relative);
@@ -50,7 +45,12 @@ pub fn resolve_target(xplane_root: &Path, config: &Config, icao: &str) -> Result
     })
 }
 
-fn display_path(path: &Path) -> String {
+/// `Output/FMS plans`, relative to the X-Plane root.
+pub fn default_dir() -> PathBuf {
+    Path::new("Output").join("FMS plans")
+}
+
+pub fn display_path(path: &Path) -> String {
     path.components()
         .filter_map(|c| match c {
             Component::Normal(part) => Some(part.to_string_lossy()),
@@ -60,15 +60,34 @@ fn display_path(path: &Path) -> String {
         .join("/")
 }
 
-/// Output file name `{ORIGIN}{DEST}.{ext}`. The extension comes from the server's
+/// Formats whose add-on only reads one fixed file name, by SimBrief format key.
+const FIXED_FILE_NAMES: &[(&str, &str)] = &[
+    // The Zibo 737 only loads its SimBrief XML from `Output/FMS plans/b738x.xml`.
+    ("zbo", "b738x.xml"),
+];
+
+/// The fixed file name a format must be saved as, if it has one.
+pub fn fixed_file_name(format: &str) -> Option<&'static str> {
+    FIXED_FILE_NAMES
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(format))
+        .map(|(_, name)| *name)
+}
+
+/// Output file name. Formats in [`FIXED_FILE_NAMES`] always get their fixed name; all
+/// others are `{ORIGIN}{DEST}.{ext}`. The extension comes from the server's
 /// `Content-Disposition` filename if it has a usable one, otherwise from the link (with any
 /// `--KEY` suffix and directory removed). Only the extension of server-provided names is
 /// ever used, so they cannot influence the directory.
 pub fn output_file_name(
     ofp: &Ofp,
+    format: &str,
     content_disposition: Option<&str>,
     link: &str,
 ) -> Result<String, Error> {
+    if let Some(name) = fixed_file_name(format) {
+        return Ok(name.to_string());
+    }
     let origin = airport_code(&ofp.origin, "origin")?;
     let destination = airport_code(&ofp.destination, "destination")?;
     let extension = content_disposition
@@ -138,7 +157,26 @@ mod tests {
     }
 
     fn name(disposition: Option<&str>, link: &str) -> Result<String, Error> {
-        output_file_name(&ofp(), disposition, link)
+        output_file_name(&ofp(), "xpe", disposition, link)
+    }
+
+    #[test]
+    fn zibo_format_is_always_b738x_xml() {
+        let disposition = Some("attachment; filename=\"SLLPSABE.xml\"");
+        let link = "xml/X_XML_1.xml--ZBO";
+        assert_eq!(
+            output_file_name(&ofp(), "zbo", disposition, link).unwrap(),
+            "b738x.xml"
+        );
+        assert_eq!(
+            output_file_name(&ofp(), "ZBO", None, link).unwrap(),
+            "b738x.xml"
+        );
+        // Other formats with the same file type keep the airport naming.
+        assert_eq!(
+            output_file_name(&ofp(), "xml", disposition, link).unwrap(),
+            "KJFKEGLL.xml"
+        );
     }
 
     #[test]
@@ -195,9 +233,9 @@ mod tests {
     fn invalid_airports_are_rejected() {
         let mut bad = ofp();
         bad.origin = "../x".into();
-        assert!(output_file_name(&bad, None, "X.fms").is_err());
+        assert!(output_file_name(&bad, "xpe", None, "X.fms").is_err());
         bad.origin = String::new();
-        assert!(output_file_name(&bad, None, "X.fms").is_err());
+        assert!(output_file_name(&bad, "xpe", None, "X.fms").is_err());
     }
 
     fn config(text: &str) -> Config {
@@ -251,6 +289,16 @@ mod tests {
         let target = resolve_target(root.path(), &config("B752:Boeing/757"), "A20N").unwrap();
         assert_eq!(target.dir, root.path().join("Output").join("FMS plans"));
         assert_eq!(target.format, "xpe");
+        assert_eq!(target.display_dir, "Output/FMS plans");
+        assert!(target.dir.is_dir());
+    }
+
+    #[test]
+    fn empty_mapped_path_uses_fms_plans_with_mapped_format() {
+        let root = tempfile::tempdir().unwrap();
+        let target = resolve_target(root.path(), &config("B738::zbo"), "b738").unwrap();
+        assert_eq!(target.dir, root.path().join("Output").join("FMS plans"));
+        assert_eq!(target.format, "zbo");
         assert_eq!(target.display_dir, "Output/FMS plans");
         assert!(target.dir.is_dir());
     }

@@ -205,11 +205,11 @@ fn show_config(root: &Path) -> Result<Config, String> {
             Ok(target) => format!("ok: {}", target.dir.display()),
             Err(error) => error.to_string(),
         };
-        println!(
-            "  {icao:<4} -> Aircraft/{} [{}]  {status}",
-            mapping.path.display(),
-            mapping.format
-        );
+        let dir = match &mapping.path {
+            Some(path) => routing::display_path(&Path::new("Aircraft").join(path)),
+            None => routing::display_path(&routing::default_dir()),
+        };
+        println!("  {icao:<4} -> {dir} [{}]  {status}", mapping.format);
     }
     Ok(config)
 }

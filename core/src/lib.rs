@@ -109,8 +109,12 @@ pub fn download_flight_plan(
 
     let file = client.get(&url).map_err(Error::Network)?;
     check_file_response(&file)?;
-    let file_name =
-        routing::output_file_name(&ofp, file.content_disposition.as_deref(), &download.link)?;
+    let file_name = routing::output_file_name(
+        &ofp,
+        &format,
+        file.content_disposition.as_deref(),
+        &download.link,
+    )?;
 
     let path = target.dir.join(&file_name);
     write::atomic_write(&path, &file.body).map_err(|e| Error::Write {
@@ -284,6 +288,30 @@ mod tests {
         assert_eq!(saved.format_name, "FlightFactor 757 V2");
         assert_eq!(std::fs::read(&expected).unwrap(), FLP);
         assert_eq!(client.requests(), vec![OFP_URL, VM5_URL]);
+    }
+
+    #[test]
+    fn empty_path_mapping_gets_its_format_in_fms_plans() {
+        // The fixture OFP is for an E55P; map it the way the default config maps the B738.
+        const ZBO_URL: &str =
+            "https://www.simbrief.com/ofp/flightplans/xml/SLLPSABE_XML_1792870617.xml--ZBO";
+        let root = xplane_root();
+        let client = fixture_client().with(
+            ZBO_URL,
+            ok(
+                200,
+                b"<OFP></OFP>",
+                Some("attachment; filename=\"SLLPSABE.xml\""),
+            ),
+        );
+        let saved =
+            download_flight_plan(&client, &request(root.path(), "E55P::zbo", "E55P")).unwrap();
+        let plans = root.path().join("Output").join("FMS plans");
+        assert_eq!(saved.path, plans.join("b738x.xml"));
+        assert_eq!(saved.file_name, "b738x.xml");
+        assert_eq!(saved.display_dir, "Output/FMS plans");
+        assert_eq!(saved.format_name, "Zibo Mod B737");
+        assert_eq!(client.requests(), vec![OFP_URL, ZBO_URL]);
     }
 
     #[test]
